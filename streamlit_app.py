@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 # Set page title and layout
 st.title('Hello, World!')
@@ -35,64 +34,43 @@ df = pd.DataFrame({
     'Column 2': [1, 2, 3]
 })
 
-# Функция для сохранения истории изменений
-history = [df.copy()]
+# История изменений
+if 'history' not in st.session_state:
+    st.session_state.history = [df.copy()]
 
 def save_to_history(dataframe):
     """Сохранение текущего состояния таблицы в историю."""
-    history.append(dataframe.copy())
+    st.session_state.history.append(dataframe.copy())
 
 def undo_last_change():
     """Отмена последнего изменения."""
-    if len(history) > 1:
-        history.pop()  # Удалить последнее состояние
-        return history[-1]  # Вернуть предыдущее состояние
-    return history[0]  # Если изменений нет, вернуть начальное состояние
+    if len(st.session_state.history) > 1:
+        st.session_state.history.pop()  # Удалить последнее состояние
+        return st.session_state.history[-1]  # Вернуть предыдущее состояние
+    return st.session_state.history[0]  # Если изменений нет, вернуть начальное состояние
 
-# Настройка таблицы
-gb = GridOptionsBuilder.from_dataframe(df)
-gb.configure_pagination()
-gb.configure_default_column(editable=True)
-gb.configure_grid_options(onCellValueChanged=JsCode("""
-function(e) {
-    if (window.historyStack === undefined) {
-        window.historyStack = [];
-    }
-    window.historyStack.push(e.data);
-}
-"""))
-gridOptions = gb.build()
+# Основной код Streamlit
+if 'df' not in st.session_state:
+    st.session_state.df = df
 
-# Создание таблицы
-response = AgGrid(
-    df,
-    gridOptions=gridOptions,
-    enable_enterprise_modules=True,
-    update_mode='MODEL_CHANGED',
-    allow_unsafe_jscode=True,
-)
+# Интерфейс для редактирования данных
+edited_df = st.experimental_data_editor(st.session_state.df)
+if not edited_df.equals(st.session_state.df):
+    save_to_history(edited_df)
+    st.session_state.df = edited_df
 
-# Обработка нажатия Ctrl+Z с помощью JavaScript
+# Кнопка для отмены изменений
+if st.button('Undo (Ctrl+Z)'):
+    st.session_state.df = undo_last_change()
+
+st.write(st.session_state.df)
+
+# JavaScript для отслеживания нажатий Ctrl+Z
 undo_js = """
 document.addEventListener('keydown', function(event) {
     if (event.ctrlKey && event.key === 'z') {
-        const grid = window.gridOptions.api;
-        const historyStack = window.historyStack || [];
-        if (historyStack.length > 0) {
-            const lastState = historyStack.pop();
-            grid.applyTransaction({ update: [lastState] });
-        }
+        document.querySelector('button[aria-label="Undo (Ctrl+Z)"]').click();
     }
 });
 """
-
 st.markdown(f"<script>{undo_js}</script>", unsafe_allow_html=True)
-
-# Обновление данных
-if response['data'] is not None:
-    edited_df = pd.DataFrame(response['data'])
-    if not edited_df.equals(df):
-        save_to_history(edited_df)
-        df = edited_df
-
-st.write(df)
