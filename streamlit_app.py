@@ -26,3 +26,11 @@ st.write(f'You selected {slider} and chose {radio_buttons}')
 data = {'Name': ['John', 'Mary', 'Bob'], 
         'Age': [25, 31, 42]}
 st.dataframe(data)
+
+df = pd.DataFrame({
+    'Column 1': ['A', 'B', 'C'],
+    'Column 2': [1, 2, 3]
+})
+
+edited_df = st.experimental_data_editor(df)
+st.write(edited_df)
