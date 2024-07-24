@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from st_aggrid import AgGrid, GridOptionsBuilder
 
 # Set page title and layout
 st.title('Hello, World!')
@@ -34,36 +35,48 @@ df = pd.DataFrame({
     'Column 2': [1, 2, 3]
 })
 
-# История изменений
+# Инициализация истории изменений
 if 'history' not in st.session_state:
     st.session_state.history = [df.copy()]
 
+# Функция для сохранения истории изменений
 def save_to_history(dataframe):
-    """Сохранение текущего состояния таблицы в историю."""
     st.session_state.history.append(dataframe.copy())
 
+# Функция для отмены последнего изменения
 def undo_last_change():
-    """Отмена последнего изменения."""
     if len(st.session_state.history) > 1:
-        st.session_state.history.pop()  # Удалить последнее состояние
-        return st.session_state.history[-1]  # Вернуть предыдущее состояние
-    return st.session_state.history[0]  # Если изменений нет, вернуть начальное состояние
+        st.session_state.history.pop()
+        return st.session_state.history[-1]
+    return st.session_state.history[0]
 
-# Основной код Streamlit
-if 'df' not in st.session_state:
-    st.session_state.df = df
+# Настройка таблицы
+gb = GridOptionsBuilder.from_dataframe(df)
+gb.configure_pagination()
+gb.configure_default_column(editable=True)
+gridOptions = gb.build()
 
-# Интерфейс для редактирования данных
-edited_df = st.experimental_data_editor(st.session_state.df)
-if not edited_df.equals(st.session_state.df):
-    save_to_history(edited_df)
-    st.session_state.df = edited_df
+# Создание таблицы
+response = AgGrid(
+    df,
+    gridOptions=gridOptions,
+    enable_enterprise_modules=True,
+    update_mode='MODEL_CHANGED'
+)
+
+# Обновление данных таблицы
+if response['data'] is not None:
+    edited_df = pd.DataFrame(response['data'])
+    if not edited_df.equals(df):
+        save_to_history(edited_df)
+        df = edited_df
 
 # Кнопка для отмены изменений
 if st.button('Undo (Ctrl+Z)'):
-    st.session_state.df = undo_last_change()
+    df = undo_last_change()
 
-st.write(st.session_state.df)
+# Отображение таблицы
+st.write(df)
 
 # JavaScript для отслеживания нажатий Ctrl+Z
 undo_js = """
