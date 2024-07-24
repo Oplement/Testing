@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import keyboard
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 # Set page title and layout
 st.title('Hello, World!')
@@ -29,13 +29,13 @@ data = {'Name': ['John', 'Mary', 'Bob'],
         'Age': [25, 31, 42]}
 st.dataframe(data)
 
-# Инициализация начального состояния таблицы
+# Начальные данные
 df = pd.DataFrame({
     'Column 1': ['A', 'B', 'C'],
     'Column 2': [1, 2, 3]
 })
 
-# Хранение истории изменений таблицы
+# Функция для сохранения истории изменений
 history = [df.copy()]
 
 def save_to_history(dataframe):
@@ -49,22 +49,50 @@ def undo_last_change():
         return history[-1]  # Вернуть предыдущее состояние
     return history[0]  # Если изменений нет, вернуть начальное состояние
 
-# Функция для отслеживания нажатия Ctrl+Z
-def on_key_event(event):
-    if event.name == 'z' and keyboard.is_pressed('ctrl'):
-        st.session_state.df = undo_last_change()
-        st.experimental_rerun()
+# Настройка таблицы
+gb = GridOptionsBuilder.from_dataframe(df)
+gb.configure_pagination()
+gb.configure_default_column(editable=True)
+gb.configure_grid_options(onCellValueChanged=JsCode("""
+function(e) {
+    if (window.historyStack === undefined) {
+        window.historyStack = [];
+    }
+    window.historyStack.push(e.data);
+}
+"""))
+gridOptions = gb.build()
 
-# Подключение функции для отслеживания нажатий клавиш
-keyboard.on_press(on_key_event)
+# Создание таблицы
+response = AgGrid(
+    df,
+    gridOptions=gridOptions,
+    enable_enterprise_modules=True,
+    update_mode='MODEL_CHANGED',
+    allow_unsafe_jscode=True,
+)
 
-# Основной код Streamlit
-if 'df' not in st.session_state:
-    st.session_state.df = df
+# Обработка нажатия Ctrl+Z с помощью JavaScript
+undo_js = """
+document.addEventListener('keydown', function(event) {
+    if (event.ctrlKey && event.key === 'z') {
+        const grid = window.gridOptions.api;
+        const historyStack = window.historyStack || [];
+        if (historyStack.length > 0) {
+            const lastState = historyStack.pop();
+            grid.applyTransaction({ update: [lastState] });
+        }
+    }
+});
+"""
 
-edited_df = st.experimental_data_editor(st.session_state.df)
-if edited_df is not st.session_state.df:
-    save_to_history(edited_df)
-    st.session_state.df = edited_df
+st.markdown(f"<script>{undo_js}</script>", unsafe_allow_html=True)
 
-st.write(st.session_state.df)
+# Обновление данных
+if response['data'] is not None:
+    edited_df = pd.DataFrame(response['data'])
+    if not edited_df.equals(df):
+        save_to_history(edited_df)
+        df = edited_df
+
+st.write(df)
