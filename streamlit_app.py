@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from st_aggrid import AgGrid, GridOptionsBuilder
 
 # Set page title and layout
 st.title('Hello, World!')
@@ -29,61 +28,21 @@ data = {'Name': ['John', 'Mary', 'Bob'],
         'Age': [25, 31, 42]}
 st.dataframe(data)
 
-# Начальные данные
-df = pd.DataFrame({
-    'Column 1': ['A', 'B', 'C'],
-    'Column 2': [1, 2, 3]
-})
+# Загрузка файла
+uploaded_file = st.file_uploader("Загрузите XLSX файл", type="xlsx")
 
-# Инициализация истории изменений
-if 'history' not in st.session_state:
-    st.session_state.history = [df.copy()]
+if uploaded_file is not None:
+    # Чтение файла в DataFrame
+    df = pd.read_excel(uploaded_file)
 
-# Функция для сохранения истории изменений
-def save_to_history(dataframe):
-    st.session_state.history.append(dataframe.copy())
+    # Создание таблицы с возможностью фильтрации
+    st.subheader("Таблица данных")
+    filtered_df = st.dataframe(df, height=400)  
 
-# Функция для отмены последнего изменения
-def undo_last_change():
-    if len(st.session_state.history) > 1:
-        st.session_state.history.pop()
-        return st.session_state.history[-1]
-    return st.session_state.history[0]
+    # Добавление столбцов для фильтрации
+    selected_columns = st.multiselect('Выберите столбцы для отображения', df.columns)
+    filtered_df = df[selected_columns]
 
-# Настройка таблицы
-gb = GridOptionsBuilder.from_dataframe(df)
-gb.configure_pagination()
-gb.configure_default_column(editable=True)
-gridOptions = gb.build()
-
-# Создание таблицы
-response = AgGrid(
-    df,
-    gridOptions=gridOptions,
-    enable_enterprise_modules=True,
-    update_mode='MODEL_CHANGED'
-)
-
-# Обновление данных таблицы
-if response['data'] is not None:
-    edited_df = pd.DataFrame(response['data'])
-    if not edited_df.equals(df):
-        save_to_history(edited_df)
-        df = edited_df
-
-# Кнопка для отмены изменений
-if st.button('Undo (Ctrl+Z)'):
-    df = undo_last_change()
-
-# Отображение таблицы
-st.write(df)
-
-# JavaScript для отслеживания нажатий Ctrl+Z
-undo_js = """
-document.addEventListener('keydown', function(event) {
-    if (event.ctrlKey && event.key === 'z') {
-        document.querySelector('button[aria-label="Undo (Ctrl+Z)"]').click();
-    }
-});
-"""
-st.markdown(f"<script>{undo_js}</script>", unsafe_allow_html=True)
+    # Создание кнопки для обновления таблицы
+    if st.button("Обновить таблицу"):
+        st.experimental_rerun() 
